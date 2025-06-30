@@ -1,57 +1,42 @@
 <!DOCTYPE html>
 <html style="height: 100%">
 <head>
-  <meta charset="utf-8">
-  <title>GraphGL with ForceAtlas2</title>
+  <meta charset="utf-8" />
+  <title>3D Lines from Go Server</title>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
 </head>
-<body style="margin:0;height:100%">
-  <div id="main" style="height: 100%"></div>
+<body style="height: 100%; margin: 0">
+  <div id="chart3d" style="width: 100%; height: 100%"></div>
   <script>
-    var chart = echarts.init(document.getElementById('main'));
+    const colors = ['#d62728', '#2ca02c', '#1f77b4'];
 
-    fetch('/graph-data')
+    var chart = echarts.init(document.getElementById('chart3d'));
+
+    fetch('/lines')
       .then(res => res.json())
-      .then(graph => {
-        let categoriesMap = {};
-        let categories = [];
-
-        graph.nodes.forEach(n => {
-          if (!categoriesMap[n.category]) {
-            categories.push({ name: 'Category ' + n.category });
-            categoriesMap[n.category] = true;
+      .then(lines => {
+        const series = lines.map((lineData, idx) => ({
+          type: 'line3D',
+          data: lineData,
+          lineStyle: {
+            width: 4,
+            color: colors[idx % colors.length]
           }
-        });
+        }));
 
         chart.setOption({
-          color: [
-            'rgb(203,239,15)', 'rgb(73,15,239)', 'rgb(239,231,15)',
-            'rgb(15,217,239)', 'rgb(239,15,58)', 'rgb(239,102,15)'
-          ],
-          series: [
-            {
-              type: 'graphGL',
-              nodes: graph.nodes,
-              edges: graph.edges,
-              categories: categories,
-              lineStyle: {
-                color: 'rgba(255,255,255,0.2)'
-              },
-              itemStyle: {
-                opacity: 1
-              },
-              forceAtlas2: {
-                steps: 1,
-                stopThreshold: 1,
-                jitterTolerence: 10,
-                edgeWeight: [0.2, 1],
-                gravity: 0,
-                edgeWeightInfluence: 1,
-                scaling: 0.2
-              }
+          tooltip: {},
+          backgroundColor: '#fff',
+          xAxis3D: { type: 'value', name: 'X' },
+          yAxis3D: { type: 'value', name: 'Y' },
+          zAxis3D: { type: 'value', name: 'Z' },
+          grid3D: {
+            viewControl: {
+              projection: 'orthographic'
             }
-          ]
+          },
+          series: series
         });
       });
   </script>
