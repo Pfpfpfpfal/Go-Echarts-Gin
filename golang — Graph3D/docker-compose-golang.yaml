@@ -1,0 +1,5 @@
+services:
+
+  echarts-golang:
+    image: errorlogin/echarts-golang:latest
+    command: sleep infinity   
