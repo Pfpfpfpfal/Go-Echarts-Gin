@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Graph Viewer</title>
+	<script>
+		function updateGraph() {
+			const id = document.getElementById("graphInput").value;
+			const showLabels = document.getElementById("showLabels").checked ? "1" : "0";
+			const focusNode = document.getElementById("focusNode").value || "-1";
+			const grouped = document.getElementById("grouped").checked ? "1" : "0";
+			const filterGroup = grouped === "1" ? document.getElementById("filterGroup").value : "-1";
+
+			const frame = document.getElementById("graphFrame");
+			frame.src = "/graph/" + id + "?labels=" + showLabels + "&focus=" + focusNode + "&grouped=" + grouped + "&filterGroup=" + filterGroup;
+
+			document.getElementById("filterGroup").disabled = grouped !== "1";
+		}
+	</script>
+</head>
+<body style="margin:0; font-family:sans-serif;">
+	<div style="display:flex; height:calc(100vh - 50px); margin-top:50px;">
+
+    <div style="position:absolute; top:0; left:0; right:0; height:50px; background:#ddd; display:flex; align-items:center; padding:10px; gap:10px; z-index:10;">
+        <label>Временной интервал:</label>
+        <input type="datetime-local" id="startTime" style="padding:5px;">
+        <span>—</span>
+        <input type="datetime-local" id="endTime" style="padding:5px;">
+    </div>
+
+	<iframe id="graphFrame" src="/graph/0?labels=1&focus=-1&grouped=0&filterGroup=-1" style="flex:1; border:none;"></iframe>
+	<div style="width:300px; background:#f5f5f5; border-left:1px solid #ccc; padding:20px;">
+		<h3>Управление</h3>
+		<div style="margin-bottom:10px">
+			<label>Граф №</label><br>
+			<input id="graphInput" type="number" min="0" max="{{.MaxGraph}}" value="0" onchange="updateGraph()">
+		</div>
+		<div style="margin-bottom:10px">
+			<label><input type="checkbox" id="showLabels" checked onchange="updateGraph()"> Показывать подписи</label>
+		</div>
+		<div style="margin-bottom:10px">
+			<label>Показать только узел №</label><br>
+			<input id="focusNode" type="number" placeholder="Оставить все" onchange="updateGraph()">
+		</div>
+		<div style="margin-bottom:10px">
+			<label><input type="checkbox" id="grouped" onchange="updateGraph()"> Включить группировку по цвету</label>
+		</div>
+		<div style="margin-bottom:10px">
+			<label>Фильтр по группе:</label><br>
+			<select id="filterGroup" disabled onchange="updateGraph()">
+				<option value="-1">Все</option>
+				<option value="0">Группа 0 (красные)</option>
+				<option value="1">Группа 1 (зелёные)</option>
+				<option value="2">Группа 2 (синие)</option>
+			</select>
+		</div>
+	</div>
+    </div>
+</body>
+</html>
