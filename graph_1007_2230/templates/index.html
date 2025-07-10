@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>CEF Graph Filter</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      display: flex;
+    }
+    aside {
+      width: 300px;
+      padding: 15px;
+      border-right: 1px solid #ccc;
+      background: #f9f9f9;
+    }
+    main {
+      flex-grow: 1;
+      padding: 15px;
+    }
+    #graph {
+      width: 100%;
+      height: 600px;
+      border: 1px solid #ddd;
+    }
+    .autocomplete {
+      position: relative;
+    }
+    .suggestions {
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 10;
+      width: 100%;
+    }
+    .suggestion {
+      padding: 6px;
+      cursor: pointer;
+    }
+    .suggestion:hover {
+      background: #eee;
+    }
+  </style>
+</head>
+<body>
+  <aside>
+    <form method="get" action="/">
+      <label>Источник (src):</label>
+      <div class="autocomplete">
+        <input type="text" id="srcInput" name="src" placeholder="например 192.168.1.1"
+               autocomplete="off" value="{{.SelectedSrc}}" />
+        <div id="suggestionBox" class="suggestions"></div>
+      </div>
+
+      <br><br>
+      <label>От:</label>
+      <input type="datetime-local" name="start_from" value="{{.StartFrom}}" min="{{.MinStart}}" max="{{.MaxStart}}" />
+      <br><br>
+      <label>До:</label>
+      <input type="datetime-local" name="start_to" value="{{.StartTo}}" min="{{.MinStart}}" max="{{.MaxStart}}" />
+      <br><br>
+      <label>
+        <input type="checkbox" name="common" {{if .CommonOnly}}checked{{end}} />
+        Только src с общими dst
+      </label>
+      <br><br>
+      <button type="submit">Показать</button>
+    </form>
+  </aside>
+
+  <main>
+    <div id="graph"></div>
+  </main>
+
+  <script>
+    const allSrc = {{marshal .SrcList}};
+    const input = document.getElementById("srcInput");
+    const box = document.getElementById("suggestionBox");
+
+    input.addEventListener("input", () => {
+      const value = input.value.toLowerCase();
+      box.innerHTML = "";
+      if (!value) return;
+
+      allSrc.filter(src => src.toLowerCase().includes(value)).slice(0, 20).forEach(src => {
+        const div = document.createElement("div");
+        div.className = "suggestion";
+        div.textContent = src;
+        div.onclick = () => {
+          input.value = src;
+          box.innerHTML = "";
+        };
+        box.appendChild(div);
+      });
+    });
+
+    document.addEventListener("click", e => {
+      if (!box.contains(e.target) && e.target !== input) {
+        box.innerHTML = "";
+      }
+    });
+
+    const nodes = {{.NodesJSON}};
+    const links = {{.LinksJSON}};
+    const chart = echarts.init(document.getElementById('graph'));
+
+    chart.setOption({
+      title: { text: 'CEF Network Graph' },
+      tooltip: {},
+      legend: [{ data: ['Source', 'Destination'] }],
+      series: [{
+        type: 'graph',
+        layout: 'force',
+        roam: true,
+        label: { show: true },
+        force: { repulsion: 700 },
+        categories: [{ name: 'Source' }, { name: 'Destination' }],
+        data: nodes.map(n => ({
+          name: n.id,
+          category: n.category,
+          symbolSize: 20
+        })),
+        links: links.map(l => ({
+          source: l.source,
+          target: l.target
+        }))
+      }]
+    });
+  </script>
+</body>
+</html>
