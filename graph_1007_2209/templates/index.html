@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>CEF Network Graph</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <style>
+    #graph {
+      width: 100%;
+      height: 600px;
+      border: 1px solid #ddd;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 10px;
+    }
+    form {
+      margin-bottom: 20px;
+    }
+    select {
+      font-size: 14px;
+      padding: 4px;
+    }
+    button {
+      padding: 6px 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>CEF Network Graph</h1>
+
+  <form method="get" action="/">
+    <label for="src">Выберите src для фильтрации:</label>
+    <select id="src" name="src">
+      <option value="">-- Показать все --</option>
+      {{range .SrcList}}
+        <option value="{{.}}" {{if eq $.SelectedSrc .}}selected{{end}}>{{.}}</option>
+      {{end}}
+    </select>
+    <button type="submit">Показать</button>
+  </form>
+
+  <div id="graph"></div>
+
+  <script>
+    const nodes = {{.NodesJSON}};
+    const links = {{.LinksJSON}};
+
+    var chart = echarts.init(document.getElementById('graph'));
+
+    var option = {
+      title: {
+        text: 'CEF Network Graph'
+      },
+      tooltip: {},
+      legend: [{
+        data: ['Source', 'Destination']
+      }],
+      series: [{
+        type: 'graph',
+        layout: 'force',
+        roam: true,
+        label: {
+          show: true
+        },
+        force: {
+          repulsion: 800
+        },
+        categories: [
+          { name: 'Source' },
+          { name: 'Destination' }
+        ],
+        data: nodes.map(n => ({
+          name: n.id,
+          category: n.category,
+          symbolSize: 20
+        })),
+        links: links.map(l => ({
+          source: l.source,
+          target: l.target
+        }))
+      }]
+    };
+
+    chart.setOption(option);
+  </script>
+</body>
+</html>
