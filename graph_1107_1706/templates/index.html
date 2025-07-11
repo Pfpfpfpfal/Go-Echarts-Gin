@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>CEF Network Graph</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      height: 100vh;
+      background: #f0f2f5;
+      overflow: hidden;
+    }
+    form#filterForm {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      flex-direction: row;
+    }
+    main {
+      flex-grow: 2;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      gap: 15px;
+      background: #fff;
+      box-shadow: 0 0 20px rgba(0,0,0,0.08);
+      border-radius: 8px;
+      margin: 15px;
+      overflow: hidden;
+    }
+    aside.right {
+      width: 360px;
+      background: #fff;
+      border-left: 1px solid #ddd;
+      padding: 20px;
+      overflow-y: auto;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.05);
+      border-radius: 0 8px 8px 0;
+      margin: 15px 15px 15px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .time-filter {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .time-filter label {
+      font-weight: 600;
+      white-space: nowrap;
+      color: #555;
+    }
+    .time-filter input[type=datetime-local],
+    select,
+    input[type=text] {
+      padding: 8px 12px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1.8px solid #ddd;
+      background: #fafafa;
+      transition: border-color 0.3s ease;
+      width: 180px;
+      outline-offset: 2px;
+    }
+    .time-filter button, button {
+      cursor: pointer;
+      padding: 8px 16px;
+      background: #5c9ded;
+      color: white;
+      border: none;
+      font-weight: 600;
+      border-radius: 6px;
+      transition: background-color 0.25s ease;
+      user-select: none;
+    }
+    button:hover { background: #4a86d8; }
+
+    .graph-container {
+      flex-grow: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    #graph { width: 100%; height: 100%; }
+
+    .buttons {
+      margin-top: 10px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .autocomplete {
+      position: relative;
+    }
+    .suggestions {
+      position: absolute;
+      background: white;
+      border: 1px solid #ddd;
+      max-height: 200px;
+      overflow-y: auto;
+      width: 100%;
+      z-index: 10;
+      border-radius: 0 0 8px 8px;
+      box-shadow: 0 8px 20px rgb(0 0 0 / 0.1);
+    }
+    .suggestion {
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      font-size: 14px;
+    }
+    .suggestion:hover {
+      background: #5c9ded;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+<form id="filterForm" method="get" action="/">
+  <main>
+    <div class="time-filter">
+      <label for="start_from">Начало:</label>
+      <input type="datetime-local" name="start_from" id="start_from" value="{{.StartFrom}}" min="{{.MinStart}}" max="{{.MaxStart}}" />
+      <label for="start_to">Конец:</label>
+      <input type="datetime-local" name="start_to" id="start_to" value="{{.StartTo}}" min="{{.MinStart}}" max="{{.MaxStart}}" />
+      <button type="submit">Применить</button>
+      <button type="button" onclick="resetTime()">Сбросить</button>
+    </div>
+
+    <div class="graph-container">
+      <div id="graph"></div>
+    </div>
+
+    <div class="buttons">
+      <button type="button" onclick="zoomIn()">🔍 Приблизить</button>
+      <button type="button" onclick="zoomOut()">🔎 Отдалить</button>
+    </div>
+  </main>
+
+  <aside class="right">
+    <label>Источник (src)</label>
+    <div class="autocomplete">
+      <input type="text" id="srcInput" name="src" placeholder="например 192.168.1.1" autocomplete="off" value="{{.SelectedSrc}}" />
+      <div id="suggestionBox" class="suggestions"></div>
+    </div>
+
+    <label>Получатель (dst)</label>
+    <div class="autocomplete">
+      <input type="text" id="dstInput" placeholder="например 10.0.0.1" autocomplete="off" />
+      <div id="dstSuggestionBox" class="suggestions"></div>
+    </div>
+
+    <label>
+      <input type="checkbox" name="common" id="commonOnly" {{if .CommonOnly}}checked{{end}} />
+      Только src с общими dst
+    </label>
+
+    <label>Показ узлов</label>
+    <select id="nodeFilter" onchange="applyNodeFilter()">
+      <option value="all">Все</option>
+      <option value="src">Только src</option>
+      <option value="dst">Только dst</option>
+    </select>
+
+    <label>Подписи на графе</label>
+    <button type="button" onclick="toggleLabels()">📝 <span id="labelState">вкл</span></button>
+  </aside>
+</form>
+
+<script>
+  const allSrc = {{marshal .SrcList}};
+  const nodes = {{.NodesJSON}};
+  const links = {{.LinksJSON}};
+
+  const input = document.getElementById("srcInput");
+  const box = document.getElementById("suggestionBox");
+
+  input.addEventListener("input", () => {
+    const val = input.value.toLowerCase();
+    box.innerHTML = "";
+    if (!val) return;
+    allSrc.filter(src => src.toLowerCase().includes(val)).slice(0, 20).forEach(src => {
+      const div = document.createElement("div");
+      div.className = "suggestion";
+      div.textContent = src;
+      div.onclick = () => {
+        input.value = src;
+        box.innerHTML = "";
+      };
+      box.appendChild(div);
+    });
+  });
+
+  document.addEventListener("click", e => {
+    if (!box.contains(e.target) && e.target !== input) box.innerHTML = "";
+    if (!dstBox.contains(e.target) && e.target !== dstInput) dstBox.innerHTML = "";
+  });
+
+  const dstInput = document.getElementById("dstInput");
+  const dstBox = document.getElementById("dstSuggestionBox");
+  const allDst = [...new Set(nodes.filter(n => n.category === 1).map(n => n.id))];
+
+  dstInput.addEventListener("input", () => {
+    const val = dstInput.value.toLowerCase();
+    dstBox.innerHTML = "";
+    if (!val) return;
+    allDst.filter(dst => dst.toLowerCase().includes(val)).slice(0, 20).forEach(dst => {
+      const div = document.createElement("div");
+      div.className = "suggestion";
+      div.textContent = dst;
+      div.onclick = () => {
+        dstInput.value = dst;
+        dstBox.innerHTML = "";
+        showDstGraph(dst);
+      };
+      dstBox.appendChild(div);
+    });
+  });
+
+  function resetTime() {
+    document.getElementById("start_from").value = "";
+    document.getElementById("start_to").value = "";
+    document.getElementById("filterForm").submit();
+  }
+
+  const chart = echarts.init(document.getElementById('graph'));
+  let currentZoom = 1.0;
+  let labelsVisible = true;
+  const defaultCategories = [{name:'Source'}, {name:'Destination'}];
+
+  let originalNodes = JSON.parse(JSON.stringify(nodes));
+  let originalLinks = JSON.parse(JSON.stringify(links));
+
+  function renderGraph(nodesToRender, linksToRender, categories) {
+    chart.setOption({
+      
+      tooltip: {},
+      legend: [{ data: categories.map(c => c.name) }],
+      series: [{
+        type: 'graph',
+        layout: 'force',
+        roam: true,
+        zoom: currentZoom,
+        scaleLimit: { min: 0.1, max: 10 },
+        label: { show: labelsVisible, formatter: '{b}', fontWeight: '600' },
+        force: { repulsion: 700 },
+        categories: categories,
+        data: nodesToRender.map(n => ({
+          name: n.id,
+          category: n.category,
+          symbolSize: 20
+        })),
+        links: linksToRender.map(l => ({
+          source: l.source,
+          target: l.target
+        }))
+      }]
+    });
+  }
+
+  renderGraph(originalNodes, originalLinks, defaultCategories);
+
+  function zoomIn() {
+    currentZoom *= 1.2;
+    chart.setOption({ series: [{ zoom: currentZoom }] });
+  }
+
+  function zoomOut() {
+    currentZoom /= 1.2;
+    chart.setOption({ series: [{ zoom: currentZoom }] });
+  }
+
+  function toggleLabels() {
+    labelsVisible = !labelsVisible;
+    chart.setOption({ series: [{ label: { show: labelsVisible } }] });
+    document.getElementById("labelState").textContent = labelsVisible ? "вкл" : "выкл";
+  }
+
+  function applyNodeFilter() {
+    const mode = document.getElementById("nodeFilter").value;
+
+    let filteredNodes = [];
+    let filteredLinks = [];
+
+    if (mode === "src") {
+      filteredNodes = originalNodes.filter(n => n.category === 0);
+      const srcSet = new Set(filteredNodes.map(n => n.id));
+      filteredLinks = originalLinks.filter(l => srcSet.has(l.source));
+    } else if (mode === "dst") {
+      const validDst = new Set();
+      originalLinks.forEach(link => validDst.add(link.target));
+      filteredNodes = originalNodes.filter(n => n.category === 1 && validDst.has(n.id));
+      filteredLinks = originalLinks.filter(l => validDst.has(l.target));
+    } else {
+      filteredNodes = [...originalNodes];
+      filteredLinks = [...originalLinks];
+    }
+
+    renderGraph(filteredNodes, filteredLinks, defaultCategories);
+  }
+
+  function showDstGraph(selectedDst) {
+    const relatedLinks = originalLinks.filter(l => l.target === selectedDst);
+    const relatedSrcIds = new Set(relatedLinks.map(l => l.source));
+    const filteredNodes = originalNodes.filter(n =>
+      n.id === selectedDst || relatedSrcIds.has(n.id)
+    );
+    renderGraph(filteredNodes, relatedLinks, defaultCategories);
+  }
+</script>
+</body>
+</html>
