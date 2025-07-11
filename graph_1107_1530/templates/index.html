@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>CEF Network Graph</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <!-- Подключаем шрифт Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+
+  <style>
+    /* Базовые стили */
+    body {
+      margin: 0; padding: 0; font-family: 'Inter', sans-serif;
+      display: flex; height: 100vh; background: #f0f2f5;
+      color: #333;
+      overflow: hidden;
+    }
+
+    form#filterForm {
+      display: flex; width: 100%; height: 100%;
+      flex-direction: row;
+    }
+
+    main {
+      flex-grow: 2;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      gap: 15px;
+      background: #fff;
+      box-shadow: 0 0 20px rgba(0,0,0,0.08);
+      border-radius: 8px;
+      margin: 15px;
+      overflow: hidden;
+    }
+
+    aside.right {
+      width: 360px;
+      background: #fff;
+      border-left: 1px solid #ddd;
+      padding: 20px;
+      overflow-y: auto;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.05);
+      border-radius: 0 8px 8px 0;
+      margin: 15px 15px 15px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .time-filter {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .time-filter label {
+      font-weight: 600;
+      white-space: nowrap;
+      color: #555;
+    }
+    .time-filter input[type=datetime-local] {
+      padding: 8px 12px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1.8px solid #ddd;
+      background: #fafafa;
+      transition: border-color 0.3s ease;
+      width: 180px;
+      outline-offset: 2px;
+    }
+    .time-filter input[type=datetime-local]:focus {
+      border-color: #5c9ded;
+      background: #fff;
+      box-shadow: 0 0 5px rgba(92,157,237,0.5);
+    }
+    .time-filter button {
+      cursor: pointer;
+      padding: 8px 16px;
+      background: #5c9ded;
+      color: white;
+      border: none;
+      font-weight: 600;
+      border-radius: 6px;
+      box-shadow: 0 3px 8px rgb(92 157 237 / 0.3);
+      transition: background-color 0.25s ease;
+      user-select: none;
+    }
+    .time-filter button:hover {
+      background: #4a86d8;
+      box-shadow: 0 4px 12px rgb(74 134 216 / 0.6);
+    }
+
+    .graph-container {
+      flex-grow: 1;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgb(0 0 0 / 0.1);
+      overflow: hidden;
+      background: #fff;
+    }
+
+    #graph {
+      width: 100%; height: 100%;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 6px;
+    }
+
+    select, input[type=text] {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1.8px solid #ddd;
+      background: #fafafa;
+      box-sizing: border-box;
+      transition: border-color 0.3s ease;
+      outline-offset: 2px;
+    }
+    select:focus, input[type=text]:focus {
+      border-color: #5c9ded;
+      background: #fff;
+      box-shadow: 0 0 5px rgba(92,157,237,0.5);
+    }
+
+    .buttons {
+      margin-top: 10px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      cursor: pointer;
+      padding: 8px 14px;
+      background: #5c9ded;
+      color: white;
+      border: none;
+      font-weight: 600;
+      border-radius: 6px;
+      box-shadow: 0 3px 8px rgb(92 157 237 / 0.3);
+      transition: background-color 0.25s ease;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    button:hover {
+      background: #4a86d8;
+      box-shadow: 0 4px 12px rgb(74 134 216 / 0.6);
+    }
+
+    .autocomplete {
+      position: relative;
+    }
+    .suggestions {
+      position: absolute;
+      background: white;
+      border: 1px solid #ddd;
+      max-height: 200px;
+      overflow-y: auto;
+      width: 100%;
+      z-index: 10;
+      border-radius: 0 0 8px 8px;
+      box-shadow: 0 8px 20px rgb(0 0 0 / 0.1);
+    }
+    .suggestion {
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      font-size: 14px;
+    }
+    .suggestion:hover {
+      background: #5c9ded;
+      color: white;
+    }
+
+    /* Кастомный toggle switch для чекбокса */
+    label[for="commonOnly"] {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      gap: 12px;
+      font-weight: 600;
+      color: #444;
+      user-select: none;
+    }
+    #commonOnly {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 42px;
+      height: 24px;
+      background: #ddd;
+      border-radius: 20px;
+      position: relative;
+      outline: none;
+      transition: background-color 0.3s ease;
+      cursor: pointer;
+      vertical-align: middle;
+    }
+    #commonOnly:checked {
+      background: #5c9ded;
+      box-shadow: 0 0 5px rgba(92,157,237,0.6);
+    }
+    #commonOnly::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s ease;
+      box-shadow: 0 1px 4px rgb(0 0 0 / 0.15);
+    }
+    #commonOnly:checked::before {
+      transform: translateX(18px);
+    }
+
+  </style>
+</head>
+<body>
+<form id="filterForm" method="get" action="/">
+  <main>
+    <div class="time-filter">
+      <label for="start_from">Начало:</label>
+      <input type="datetime-local" name="start_from" id="start_from" value="{{.StartFrom}}" min="{{.MinStart}}" max="{{.MaxStart}}" />
+      <label for="start_to">Конец:</label>
+      <input type="datetime-local" name="start_to" id="start_to" value="{{.StartTo}}" min="{{.MinStart}}" max="{{.MaxStart}}" />
+      <button type="submit">Применить</button>
+      <button type="button" onclick="resetTime()">Сбросить</button>
+    </div>
+
+    <div class="graph-container">
+      <div id="graph"></div>
+    </div>
+
+    <div class="buttons">
+      <button type="button" onclick="zoomIn()">🔍 Приблизить</button>
+      <button type="button" onclick="zoomOut()">🔎 Отдалить</button>
+    </div>
+  </main>
+
+  <aside class="right">
+    <label>Источник (src)</label>
+    <div class="autocomplete">
+      <input type="text" id="srcInput" name="src" placeholder="например 192.168.1.1" autocomplete="off" value="{{.SelectedSrc}}" />
+      <div id="suggestionBox" class="suggestions"></div>
+    </div>
+
+    <label for="commonOnly">
+      <input type="checkbox" name="common" id="commonOnly" {{if .CommonOnly}}checked{{end}} />
+      Только src с общими dst
+    </label>
+
+    <label>Показ узлов</label>
+    <select id="nodeFilter" onchange="applyNodeFilter()">
+      <option value="all">Все</option>
+      <option value="src">Только src</option>
+      <option value="dst">Только dst</option>
+    </select>
+
+    <label>Группировка по dpt</label>
+    <button type="button" id="groupDptBtn" onclick="toggleGroupByDpt()">Выкл</button>
+
+    <label>Подписи на графе</label>
+    <button type="button" onclick="toggleLabels()">📝 <span id="labelState">вкл</span></button>
+  </aside>
+</form>
+
+<script>
+  const allSrc = {{marshal .SrcList}};
+  const input = document.getElementById("srcInput");
+  const box = document.getElementById("suggestionBox");
+
+  input.addEventListener("input", () => {
+    const val = input.value.toLowerCase();
+    box.innerHTML = "";
+    if (!val) return;
+
+    allSrc.filter(src => src.toLowerCase().includes(val)).slice(0, 20).forEach(src => {
+      const div = document.createElement("div");
+      div.className = "suggestion";
+      div.textContent = src;
+      div.onclick = () => {
+        input.value = src;
+        box.innerHTML = "";
+      };
+      box.appendChild(div);
+    });
+  });
+
+  document.addEventListener("click", e => {
+    if (!box.contains(e.target) && e.target !== input) {
+      box.innerHTML = "";
+    }
+  });
+
+  function resetTime() {
+    document.getElementById("start_from").value = "";
+    document.getElementById("start_to").value = "";
+    document.getElementById("filterForm").submit();
+  }
+
+  const nodes = {{.NodesJSON}};
+  const links = {{.LinksJSON}};
+
+  const chart = echarts.init(document.getElementById('graph'));
+  let currentZoom = 1.0;
+  let labelsVisible = true;
+  let groupByDpt = false;
+  let originalNodes = JSON.parse(JSON.stringify(nodes));
+  let originalLinks = JSON.parse(JSON.stringify(links));
+
+  const defaultCategories = [{name:'Source'}, {name:'Destination'}];
+
+  function renderGraph(nodesToRender, linksToRender, categories) {
+    chart.setOption({
+      title: { text: 'CEF Network Graph', left: 'center', textStyle: { fontWeight: '600' } },
+      tooltip: {},
+      legend: [{ data: categories.map(c => c.name) }],
+      series: [{
+        type: 'graph',
+        layout: 'force',
+        roam: true,
+        zoom: currentZoom,
+        scaleLimit: { min: 0.1, max: 10 },
+        label: { show: labelsVisible, formatter: '{b}', fontWeight: '600' },
+        force: { repulsion: 700 },
+        categories: categories,
+        data: nodesToRender.map(n => ({
+          name: n.id,
+          category: n.category,
+          symbolSize: 20,
+          itemStyle: {
+            borderColor: '#fff',
+            borderWidth: 2
+          }
+        })),
+        links: linksToRender.map(l => ({
+          source: l.source,
+          target: l.target,
+          lineStyle: { width: 2 }
+        }))
+      }]
+    });
+  }
+
+  // Начальный рендер
+  renderGraph(originalNodes, originalLinks, defaultCategories);
+
+  function zoomIn() {
+    currentZoom *= 1.2;
+    chart.setOption({ series: [{ zoom: currentZoom }] });
+  }
+
+  function zoomOut() {
+    currentZoom /= 1.2;
+    chart.setOption({ series: [{ zoom: currentZoom }] });
+  }
+
+  function toggleLabels() {
+    labelsVisible = !labelsVisible;
+    chart.setOption({ series: [{ label: { show: labelsVisible } }] });
+    document.getElementById("labelState").textContent = labelsVisible ? "вкл" : "выкл";
+  }
+
+  function applyNodeFilter() {
+    const mode = document.getElementById("nodeFilter").value;
+    let filteredNodes, filteredLinks;
+
+    if (mode === "src") {
+      filteredNodes = originalNodes.filter(n => n.category === 0);
+      const nodeNames = new Set(filteredNodes.map(n => n.id));
+      filteredLinks = originalLinks.filter(l => nodeNames.has(l.source));
+    } else if (mode === "dst") {
+      filteredNodes = originalNodes.filter(n => n.category === 1);
+      const nodeNames = new Set(filteredNodes.map(n => n.id));
+      filteredLinks = originalLinks.filter(l => nodeNames.has(l.target));
+    } else {
+      filteredNodes = [...originalNodes];
+      filteredLinks = [...originalLinks];
+    }
+
+    if (groupByDpt) {
+      applyGroupByDpt(filteredNodes, filteredLinks);
+      return;
+    }
+
+    renderGraph(filteredNodes, filteredLinks, defaultCategories);
+  }
+
+  function toggleGroupByDpt() {
+    groupByDpt = !groupByDpt;
+    const btn = document.getElementById("groupDptBtn");
+    btn.textContent = groupByDpt ? "Вкл" : "Выкл";
+
+    if (groupByDpt) {
+      applyGroupByDpt(originalNodes, originalLinks);
+    } else {
+      renderGraph(originalNodes, originalLinks, defaultCategories);
+    }
+  }
+
+  function applyGroupByDpt(nodesToUse, linksToUse) {
+    const dptSet = new Set(nodesToUse.map(n => n.dpt));
+    const dptArr = Array.from(dptSet).sort((a,b) => a-b);
+    const categoryMap = new Map();
+    dptArr.forEach((dpt, i) => categoryMap.set(dpt, i));
+
+    const newNodes = nodesToUse.map(n => ({
+      ...n,
+      category: categoryMap.get(n.dpt)
+    }));
+
+    const categories = dptArr.map(dpt => ({ name: `dpt ${dpt}` }));
+
+    renderGraph(newNodes, linksToUse, categories);
+  }
+</script>
+</body>
+</html>
